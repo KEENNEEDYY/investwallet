@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from app.services.asset_service import get_assets, upsert_asset
+from app.services.history_service import update_asset_history
 
 st.header("Cadastro de ativos")
 with st.form("asset_form", clear_on_submit=True):
@@ -23,10 +24,29 @@ with st.form("asset_form", clear_on_submit=True):
     bolsa = c5.selectbox("Bolsa", bolsas)
     tipo = st.selectbox("Tipo", ["AÇÃO", "ETF", "BDR", "FII", "REIT", "OUTRO"])
     submitted = st.form_submit_button("Salvar ativo")
+
     if submitted:
         try:
             upsert_asset(ticker, nome, tipo, mercado, bolsa, moeda)
             st.success(f"Ativo {ticker} salvo.")
+
+            try:
+                with st.spinner(f"Carregando histórico de {ticker}..."):
+                    resultado = update_asset_history(ticker, mercado)
+
+                st.success(
+                    f"Histórico de {ticker} atualizado: "
+                    f"{resultado['registros']} registros, "
+                    f"de {resultado['primeira_data']} até "
+                    f"{resultado['ultima_data']}."
+                )
+
+            except Exception as exc:
+                st.warning(
+                    f"O ativo foi cadastrado, mas o histórico não pôde "
+                    f"ser atualizado: {exc}"
+                )
+
         except Exception as exc:
             st.error(str(exc))
 
