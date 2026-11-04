@@ -6,10 +6,11 @@ from app.repositories.portfolio_repository import list_assets
 from app.repositories.history_repository import (
     get_latest_history_date,
     save_daily_history,
+    insert_missing_daily_history,
 )
 
 
-def collect_asset_history(asset):
+def collect_asset_history(asset, force_full=False):
     try:
         import yfinance as yf
     except ImportError as exc:
@@ -29,8 +30,17 @@ def collect_asset_history(asset):
 
     ultima_data = get_latest_history_date(ticker)
 
-    if ultima_data:
-        # Busca uma janela sobreposta para atualizar candles recentes.
+    if force_full:
+        history = yf.Ticker(symbol).history(
+            period="max",
+            interval="1d",
+            auto_adjust=False,
+            actions=False,
+            timeout=30,
+        )
+        tipo_carga = "reforço_completo"
+
+    elif ultima_data:
         data_inicio = (
             datetime.strptime(ultima_data, "%Y-%m-%d").date()
             - timedelta(days=7)
@@ -44,8 +54,8 @@ def collect_asset_history(asset):
             timeout=30,
         )
         tipo_carga = "incremental"
+
     else:
-        # Primeira carga: todo o histórico disponibilizado pelo Yahoo.
         history = yf.Ticker(symbol).history(
             period="max",
             interval="1d",
@@ -69,7 +79,6 @@ def collect_asset_history(asset):
             f"Histórico insuficiente para calcular retornos de {symbol}."
         )
 
-    # Calcula o retorno usando os fechamentos consecutivos da janela.
     history["retorno"] = history["Close"].pct_change() * 100
 
     records = []
@@ -115,7 +124,10 @@ def collect_asset_history(asset):
             f"Nenhum candle válido encontrado para {symbol}."
         )
 
-    saved = save_daily_history(records)
+    if force_full:
+        saved = insert_missing_daily_history(records)
+    else:
+        saved = save_daily_history(records)
 
     return {
         "ticker": ticker,

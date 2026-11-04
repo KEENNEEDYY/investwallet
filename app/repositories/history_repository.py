@@ -45,3 +45,30 @@ def get_latest_history_date(ticker):
         """, (ticker,)).fetchone()
 
     return row["ultima_data"] if row else None
+
+
+def insert_missing_daily_history(records):
+    """
+    Insere somente candles ainda inexistentes.
+    Registros já cadastrados não são alterados.
+    """
+    if not records:
+        return 0
+
+    with connect() as conn:
+        cursor = conn.executemany("""
+            INSERT INTO historico_diario (
+                ticker,
+                data_pregao,
+                abertura,
+                maxima,
+                minima,
+                fechamento,
+                variacao_percentual,
+                volume
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ticker, data_pregao) DO NOTHING
+        """, records)
+
+    return cursor.rowcount

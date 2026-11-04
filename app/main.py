@@ -55,6 +55,7 @@ pages = [
     st.Page("pages/4_cotacoes.py", title="Cotações e câmbio", icon="💱"),
     st.Page("pages/5_analytics.py", title="Analytics", icon="📈"),
     st.Page("pages/6_monitoramento.py", title="Monitoramento", icon="📡"),
+    st.Page("pages/7_qualidade_dados.py", title="Qualidade dos Dados", icon="🧪"),
 ]
 
 st.navigation(pages).run()

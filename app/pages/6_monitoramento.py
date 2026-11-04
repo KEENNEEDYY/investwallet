@@ -91,6 +91,95 @@ def render_monitoring():
         )
         return
 
+
+    st.subheader("Filtros do monitoramento")
+
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
+
+    with filter_col1:
+        percentil_minimo = st.slider(
+            "Percentil mínimo",
+            min_value=0,
+            max_value=100,
+            value=90,
+            step=1
+        )
+
+    with filter_col2:
+        status_selecionados = st.multiselect(
+            "Status do alerta",
+            options=[
+                "NORMAL",
+                "ATENÇÃO",
+                "EXTREMO",
+                "MUITO EXTREMO"
+            ],
+            default=["EXTREMO", "MUITO EXTREMO"]
+        )
+
+    with filter_col3:
+        tickers_disponiveis = sorted(
+            item["ticker"] for item in data
+        )
+
+        tickers_selecionados = st.multiselect(
+            "Ativos",
+            options=tickers_disponiveis,
+            default=[]
+        )
+
+    criterio = st.radio(
+        "Combinar filtros de percentil e status",
+        options=["OU", "E"],
+        horizontal=True,
+        help=(
+            "OU: atende ao percentil mínimo ou a um dos status. "
+            "E: precisa atender aos dois critérios."
+        )
+    )
+
+    filtrados = []
+
+    for item in data:
+        atende_percentil = (
+            item["percentil"] >= percentil_minimo
+        )
+
+        atende_status = (
+            item["alerta"] in status_selecionados
+        )
+
+        if status_selecionados:
+            if criterio == "OU":
+                atende_criterios = (
+                    atende_percentil or atende_status
+                )
+            else:
+                atende_criterios = (
+                    atende_percentil and atende_status
+                )
+        else:
+            atende_criterios = atende_percentil
+
+        atende_ticker = (
+            not tickers_selecionados
+            or item["ticker"] in tickers_selecionados
+        )
+
+        if atende_criterios and atende_ticker:
+            filtrados.append(item)
+
+    st.caption(
+        f"Exibindo {len(filtrados)} de {len(data)} ativos."
+    )
+
+    if not filtrados:
+        st.info("Nenhum ativo atende aos filtros selecionados.")
+        return
+
+
+
+
     colors = {
         "NORMAL": "#198754",
         "ATENÇÃO": "#d6a000",
@@ -102,7 +191,7 @@ def render_monitoring():
 
     columns = st.columns(2)
 
-    for index, item in enumerate(data):
+    for index, item in enumerate(filtrados):
         ticker = html.escape(item["ticker"])
         color = colors[item["alerta"]]
 
