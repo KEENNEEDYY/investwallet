@@ -1,0 +1,146 @@
+from pathlib import Path
+import sys
+import html
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import streamlit as st
+
+from app.repositories.portfolio_repository import list_positions
+from app.collectors.finnhub_rest_collector import FinnhubRESTCollector
+from app.collectors.finnhub_collector import FinnhubCollector
+from app.services.monitoring_service import MonitoringService
+
+
+st.set_page_config(
+    page_title="Monitoramento",
+    page_icon="📡",
+    layout="wide"
+)
+
+
+@st.cache_resource
+def get_monitoring_service():
+
+    positions = list_positions()
+
+    symbols = [
+        position["ticker"]
+        for position in positions
+        if float(position["quantidade"] or 0) > 0
+    ]
+
+    collector = FinnhubCollector(symbols=symbols)
+
+    rest_collector = FinnhubRESTCollector()
+
+    service = MonitoringService(
+        collector,
+        rest_collector
+    )
+
+    collector.start()
+
+    return collector, service
+
+
+st.title("📡 Monitoramento em tempo real")
+st.caption("Acompanhamento estatístico das cotações.")
+
+try:
+    collector, service = get_monitoring_service()
+except ValueError as error:
+    st.error(str(error))
+    st.stop()
+
+
+@st.fragment(run_every="5s")
+def render_monitoring():
+
+    positions = list_positions()
+
+    symbols = [
+        position["ticker"]
+        for position in positions
+        if float(position["quantidade"] or 0) > 0
+    ]
+
+    collector.set_symbols(symbols)
+
+    if not symbols:
+        st.info(
+            "Nenhum ativo com posição na carteira. "
+            "Adicione ativos para iniciar o monitoramento."
+        )
+        return
+
+    if collector.is_connected():
+        st.success("Conectado à Finnhub")
+    else:
+        st.warning("Aguardando conexão com a Finnhub")
+
+    data = service.get_monitoring_data(period_days=365)
+
+    if not data:
+        st.info(
+            "Aguardando cotações dos ativos da carteira. "
+            "Verifique a conexão e as permissões da API."
+        )
+        return
+
+    colors = {
+        "NORMAL": "#198754",
+        "ATENÇÃO": "#d6a000",
+        "EXTREMO": "#fd7e14",
+        "MUITO EXTREMO": "#dc3545",
+    }
+
+    st.subheader("Mapa de calor dos ativos")
+
+    columns = st.columns(2)
+
+    for index, item in enumerate(data):
+        ticker = html.escape(item["ticker"])
+        color = colors[item["alerta"]]
+
+        with columns[index % 2]:
+            with st.container(border=True):
+                st.subheader(ticker)
+
+                st.metric(
+                    "Cotação atual",
+                    f"{item['preco']:,.2f}",
+                    f"{item['variacao_percentual']:+.2f}%"
+                )
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        background:{color};
+                        color:white;
+                        padding:10px;
+                        border-radius:8px;
+                        text-align:center;
+                        font-weight:bold;">
+                        {item['alerta']}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                st.write(f"**Z-score:** {item['z_score']:.2f}")
+                st.write(f"**Percentil:** {item['percentil']:.2f}%")
+                st.write(
+                    f"**Média histórica:** "
+                    f"{item['media_historica']:.4f}%"
+                )
+                st.write(
+                    f"**Desvio padrão:** "
+                    f"{item['desvio_padrao']:.4f}%"
+                )
+
+
+render_monitoring()

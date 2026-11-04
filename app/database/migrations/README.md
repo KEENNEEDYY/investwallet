@@ -1,0 +1,1 @@
+As migrações são aditivas e executadas por `initialize_database()`. A versão 1 adiciona `mercado`, `bolsa` e `moeda` em `ativos`, adiciona `moeda` em `cotacoes` e cria `fx_rates`. Nenhuma tabela ou linha existente é apagada.
