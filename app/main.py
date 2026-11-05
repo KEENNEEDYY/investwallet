@@ -54,7 +54,8 @@ pages = [
     st.Page("pages/3_movimentacoes.py", title="Movimentações", icon="💼"),
     st.Page("pages/4_cotacoes.py", title="Cotações e câmbio", icon="💱"),
     st.Page("pages/5_analytics.py", title="Analytics", icon="📈"),
-    st.Page("pages/6_monitoramento.py", title="Monitoramento", icon="📡"),
+    st.Page("pages/6_monitoramento.py", title="Monitoramento carteira", icon="📡"),
+    st.Page("pages/8_monitoramento_ativos.py", title="Monitoramento todos ativos", icon="📡"),
     st.Page("pages/7_qualidade_dados.py", title="Qualidade dos Dados", icon="🧪"),
 ]
 
