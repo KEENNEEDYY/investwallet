@@ -101,7 +101,7 @@ def render_monitoring():
             "Percentil mínimo",
             min_value=0,
             max_value=100,
-            value=90,
+            value=0,
             step=1
         )
 
@@ -114,7 +114,7 @@ def render_monitoring():
                 "EXTREMO",
                 "MUITO EXTREMO"
             ],
-            default=["EXTREMO", "MUITO EXTREMO"]
+            default=["EXTREMO", "MUITO EXTREMO", "ATENÇÃO"]
         )
 
     with filter_col3:
@@ -127,6 +127,19 @@ def render_monitoring():
             options=tickers_disponiveis,
             default=[]
         )
+
+        variacoes_selecionadas = st.multiselect(
+            "Direção da variação percentual",
+            options=[
+                "POSITIVA (> 0%)",
+                "NEGATIVA (< 0%)"
+            ],
+            default=[],
+            help=(
+                "Selecione se deseja filtrar variações positivas "
+                "ou negativas. Sem seleção, não aplica esse critério."
+            )
+        )    
 
     criterio = st.radio(
         "Combinar filtros de percentil e status",
@@ -149,17 +162,32 @@ def render_monitoring():
             item["alerta"] in status_selecionados
         )
 
+        variacao = item["variacao_percentual"]
+
+        atende_variacao = (
+            (
+                "POSITIVA (> 0%)" in variacoes_selecionadas
+                and variacao > 0
+            )
+            or
+            (
+                "NEGATIVA (< 0%)" in variacoes_selecionadas
+                and variacao < 0
+            )
+        )
+
+        criterios = [atende_percentil]
+
         if status_selecionados:
-            if criterio == "OU":
-                atende_criterios = (
-                    atende_percentil or atende_status
-                )
-            else:
-                atende_criterios = (
-                    atende_percentil and atende_status
-                )
+            criterios.append(atende_status)
+
+        if variacoes_selecionadas:
+            criterios.append(atende_variacao)
+
+        if criterio == "OU":
+            atende_criterios = any(criterios)
         else:
-            atende_criterios = atende_percentil
+            atende_criterios = all(criterios)
 
         atende_ticker = (
             not tickers_selecionados
