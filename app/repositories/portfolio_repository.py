@@ -67,6 +67,52 @@ def save_asset(ticker, nome, tipo, mercado, bolsa, moeda):
                 mercado=excluded.mercado, bolsa=excluded.bolsa, moeda=excluded.moeda
         """, (ticker.upper().strip(), nome, tipo, mercado, bolsa, moeda))
 
+def delete_asset(ticker):
+    ticker = (ticker or "").strip().upper()
+
+    if not ticker:
+        raise ValueError("Selecione um ticker válido.")
+
+    with connect() as conn:
+        position = conn.execute(
+            "SELECT quantidade FROM carteira WHERE ticker = ?",
+            (ticker,)
+        ).fetchone()
+
+        movements = conn.execute(
+            "SELECT COUNT(*) AS total FROM movimentacoes WHERE ticker = ?",
+            (ticker,)
+        ).fetchone()
+
+        if position or movements["total"] > 0:
+            conn.execute(
+                "UPDATE ativos SET ativo = 0 WHERE ticker = ?",
+                (ticker,)
+            )
+            return "deactivated"
+
+        for table in (
+            "cotacoes",
+            "historico_diario",
+            "gauss_curve",
+            "analytics_estatistica",
+            "histograma_retorno",
+            "portfolio_snapshot",
+        ):
+            conn.execute(
+                f"DELETE FROM {table} WHERE ticker = ?",
+                (ticker,)
+            )
+
+        cursor = conn.execute(
+            "DELETE FROM ativos WHERE ticker = ?",
+            (ticker,)
+        )
+
+        if cursor.rowcount == 0:
+            raise ValueError(f"Ativo {ticker} não encontrado.")
+
+        return "deleted"
 
 def insert_quote(ticker, price, currency, low=None, high=None, open_price=None,
                  previous_close=None, change=None, change_percent=None, observed_at=None):

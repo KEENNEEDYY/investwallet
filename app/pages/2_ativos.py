@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import pandas as pd
 import streamlit as st
 
-from app.services.asset_service import get_assets, upsert_asset
+from app.services.asset_service import get_assets, upsert_asset, remove_asset
 from app.services.history_service import update_asset_history
 
 st.header("Cadastro de ativos")
@@ -58,3 +58,47 @@ else:
     st.info("Nenhum ativo cadastrado.")
 
 st.caption("Para ativos brasileiros, use o ticker reconhecido pelo Yahoo Finance, normalmente com sufixo .SA (ex.: PETR4.SA).")
+
+
+st.divider()
+st.subheader("Remover ativo")
+
+if assets:
+    tickers = [asset["ticker"] for asset in assets]
+
+    with st.form("remove_asset_form"):
+        ticker_remover = st.selectbox(
+            "Selecione o ativo",
+            tickers,
+            key="ticker_remover"
+        )
+
+        confirmar = st.checkbox(
+            f"Confirmo a remoção de {ticker_remover}"
+        )
+
+        remover = st.form_submit_button("Remover ativo")
+
+        if remover:
+            if not confirmar:
+                st.warning("Confirme a operação antes de continuar.")
+            else:
+                try:
+                    resultado = remove_asset(ticker_remover)
+
+                    if resultado == "deleted":
+                        st.success(
+                            f"Ativo {ticker_remover} removido do cadastro."
+                        )
+                    else:
+                        st.warning(
+                            f"{ticker_remover} possui posição ou movimentações. "
+                            "O cadastro foi desativado para preservar os dados financeiros."
+                        )
+
+                    st.rerun()
+
+                except Exception as exc:
+                    st.error(f"Não foi possível remover o ativo: {exc}")
+else:
+    st.info("Não há ativos cadastrados para remover.")

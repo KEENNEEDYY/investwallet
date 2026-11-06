@@ -1,5 +1,8 @@
-from app.repositories.portfolio_repository import list_assets, save_asset
-
+from app.repositories.portfolio_repository import (
+    list_assets,
+    save_asset,
+    delete_asset as repository_delete_asset,
+)
 
 def get_assets(active_only=False):
     return list_assets(active_only=active_only)
@@ -16,3 +19,12 @@ def upsert_asset(ticker, nome, tipo, mercado, bolsa, moeda):
     if moeda != expected:
         raise ValueError(f"Para o mercado {mercado}, a moeda deve ser {expected}.")
     save_asset(ticker, nome, tipo, mercado, bolsa, moeda)
+
+
+def remove_asset(ticker):
+    ticker = (ticker or "").strip().upper()
+
+    if not ticker:
+        raise ValueError("Selecione um ativo.")
+
+    return repository_delete_asset(ticker)

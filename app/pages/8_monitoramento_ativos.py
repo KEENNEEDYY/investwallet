@@ -10,9 +10,13 @@ if str(PROJECT_ROOT) not in sys.path:
 import streamlit as st
 
 from app.repositories.portfolio_repository import list_assets
-from app.collectors.finnhub_rest_collector import FinnhubRESTCollector
-from app.collectors.finnhub_collector import FinnhubCollector
-from app.services.monitoring_service import MonitoringService
+
+from app.services.monitoring_runtime import (
+    get_shared_monitoring_service,
+    refresh_shared_monitoring_symbols,
+)
+
+from app.config import MONITORING_REFRESH_SECONDS
 
 
 st.set_page_config(
@@ -22,41 +26,17 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
-def get_all_assets_monitoring_service():
-
-    assets = list_assets(active_only=True)
-
-    symbols = [
-        asset["ticker"]
-        for asset in assets
-    ]
-
-    collector = FinnhubCollector(symbols=symbols)
-
-    rest_collector = FinnhubRESTCollector()
-
-    service = MonitoringService(
-        collector,
-        rest_collector
-    )
-
-    collector.start()
-
-    return collector, service
-
-
 st.title("📡 Monitoramento de todos os ativos")
 st.caption("Acompanhamento estatístico de todos os ativos cadastrados e ativos.")
 
 try:
-    collector, service = get_all_assets_monitoring_service()
+    collector, service = get_shared_monitoring_service()
 except ValueError as error:
     st.error(str(error))
     st.stop()
 
 
-@st.fragment(run_every="5s")
+@st.fragment(run_every=f"{MONITORING_REFRESH_SECONDS}s")
 def render_monitoring():
 
     assets = list_assets(active_only=True)
@@ -66,7 +46,7 @@ def render_monitoring():
         for asset in assets
     ]
 
-    collector.set_symbols(symbols)
+    refresh_shared_monitoring_symbols(collector)
 
     if not symbols:
         st.info(
@@ -141,7 +121,7 @@ def render_monitoring():
 
     criterio = st.radio(
         "Combinar filtros de percentil e status",
-        options=["OU", "E"],
+        options=["E", "OU"],
         horizontal=True,
         help=(
             "OU: atende ao percentil mínimo ou a um dos status. "

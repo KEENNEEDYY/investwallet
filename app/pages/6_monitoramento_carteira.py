@@ -9,10 +9,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
+from app.config import MONITORING_REFRESH_SECONDS
+
 from app.repositories.portfolio_repository import list_positions
-from app.collectors.finnhub_rest_collector import FinnhubRESTCollector
-from app.collectors.finnhub_collector import FinnhubCollector
-from app.services.monitoring_service import MonitoringService
+from app.services.portfolio_service import dashboard_data
+from app.services.monitoring_runtime import (
+    get_shared_monitoring_service,
+    refresh_shared_monitoring_symbols,
+)
 
 
 st.set_page_config(
@@ -22,45 +26,27 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
-def get_monitoring_service():
-
-    positions = list_positions()
-
-    symbols = [
-        position["ticker"]
-        for position in positions
-        if float(position["quantidade"] or 0) > 0
-    ]
-
-    collector = FinnhubCollector(symbols=symbols)
-
-    rest_collector = FinnhubRESTCollector()
-
-    service = MonitoringService(
-        collector,
-        rest_collector
-    )
-
-    collector.start()
-
-    return collector, service
-
-
 st.title("📡 Monitoramento em tempo real")
 st.caption("Acompanhamento estatístico das cotações.")
 
 try:
-    collector, service = get_monitoring_service()
+    collector, service = get_shared_monitoring_service()
 except ValueError as error:
     st.error(str(error))
     st.stop()
 
 
-@st.fragment(run_every="5s")
+@st.fragment(run_every=f"{MONITORING_REFRESH_SECONDS}s")
 def render_monitoring():
 
     positions = list_positions()
+
+    portfolio_positions = dashboard_data()["positions"]
+
+    portfolio_by_ticker = {
+        position["ticker"].strip().upper(): position
+        for position in portfolio_positions
+    }
 
     symbols = [
         position["ticker"]
@@ -68,7 +54,7 @@ def render_monitoring():
         if float(position["quantidade"] or 0) > 0
     ]
 
-    collector.set_symbols(symbols)
+    refresh_shared_monitoring_symbols(collector)
 
     if not symbols:
         st.info(
@@ -81,8 +67,14 @@ def render_monitoring():
         st.success("Conectado à Finnhub")
     else:
         st.warning("Aguardando conexão com a Finnhub")
-
     data = service.get_monitoring_data(period_days=365)
+
+    tickers_carteira = {ticker.strip().upper() for ticker in symbols}
+
+    data = [
+        item for item in data
+        if item["ticker"].strip().upper() in tickers_carteira
+    ]
 
     if not data:
         st.info(
@@ -143,7 +135,7 @@ def render_monitoring():
 
     criterio = st.radio(
         "Combinar filtros de percentil e status",
-        options=["OU", "E"],
+        options=["E","OU"],
         horizontal=True,
         help=(
             "OU: atende ao percentil mínimo ou a um dos status. "
@@ -232,6 +224,22 @@ def render_monitoring():
                     f"{item['preco']:,.2f}",
                     f"{item['variacao_percentual']:+.2f}%"
                 )
+                
+                position = portfolio_by_ticker.get(item["ticker"].strip().upper())
+
+                if position:
+                    moeda = position.get("moeda") or "BRL"
+                    simbolo = "R$" if moeda == "BRL" else "US$"
+
+                    if position["lucro"] is not None:
+                        st.metric(
+                            "Lucro atual",
+                            f"{simbolo} {position['lucro']:,.2f}",
+                            f"{position['rentabilidade']:+.2f}%"
+                            if position["rentabilidade"] is not None else None
+                        )
+                    else:
+                        st.metric("Lucro atual", "Cotação indisponível")
 
                 st.markdown(
                     f"""

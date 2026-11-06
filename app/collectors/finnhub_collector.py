@@ -5,7 +5,11 @@ import time
 
 import websocket
 
-from app.config import FINNHUB_TOKEN
+from app.config import (
+    FINNHUB_TOKEN,
+    FINNHUB_WS_RETRY_SECONDS,
+    FINNHUB_WS_RECONNECT_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,8 @@ class FinnhubCollector:
         self._running = False
         self._ws = None
         self._thread = None
+        self._retry_after = 0
+        self._retry_delay_default = FINNHUB_WS_RETRY_SECONDS
 
     def set_symbols(self, symbols):
         new_symbols = tuple(sorted({
@@ -118,7 +124,36 @@ class FinnhubCollector:
             logger.exception("Erro ao processar mensagem Finnhub.")
 
     def _on_error(self, ws, error):
-        logger.error("Erro Finnhub: %s", error)
+        status_code = getattr(error, "status_code", None)
+        headers = getattr(error, "resp_headers", {}) or {}
+
+        if status_code == 429:
+            retry_after = time.time() + self._retry_delay_default
+
+            reset_time = headers.get("x-ratelimit-reset")
+
+            if reset_time:
+                try:
+                    reset_timestamp = float(reset_time)
+                    retry_after = max(
+                        retry_after,
+                        reset_timestamp
+                    )
+                except (ValueError, TypeError):
+                    pass
+
+            with self._lock:
+                self._retry_after = retry_after
+
+            retry_delay = retry_after - time.time()
+
+            logger.error(
+                "Limite Finnhub atingido (429). "
+                "Nova tentativa em %.0f segundos.",
+                retry_delay
+            )
+        else:
+            logger.error("Erro Finnhub: %s", error)
 
     def _on_close(self, ws, status_code, message):
         with self._lock:
@@ -152,10 +187,29 @@ class FinnhubCollector:
             finally:
                 with self._lock:
                     self._connected = False
+                    retry_after = self._retry_after
 
-            if self._running:
-                time.sleep(5)
+            if not self._running:
+                break
 
+            if retry_after > time.time():
+                delay = retry_after - time.time()
+            else:
+                delay = FINNHUB_WS_RECONNECT_SECONDS
+
+            logger.warning(
+                "Aguardando %.0f segundos para reconectar à Finnhub.",
+                delay
+            )
+
+            # Aguarda em intervalos curtos para permitir o encerramento.
+            remaining = delay
+
+            while self._running and remaining > 0:
+                wait_time = min(remaining, 1)
+                time.sleep(wait_time)
+                remaining -= wait_time
+    
     def start(self):
         if self._running:
             return

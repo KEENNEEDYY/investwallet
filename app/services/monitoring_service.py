@@ -5,6 +5,7 @@ import time
 from datetime import date
 from statistics import NormalDist
 
+from app.config import FINNHUB_REST_CACHE_SECONDS
 from app.services.analytics_service import ticker_analytics
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ class MonitoringService:
         self.collector = collector
         self.rest_collector = rest_collector
         self._rest_cache = {}
-        self._rest_cache_ttl = 30
+        self._rest_cache_ttl = FINNHUB_REST_CACHE_SECONDS
 
     @staticmethod
     def classify_alert(z_score):
