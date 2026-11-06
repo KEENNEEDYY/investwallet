@@ -131,7 +131,26 @@ def render_monitoring():
                 "Selecione se deseja filtrar variações positivas "
                 "ou negativas. Sem seleção, não aplica esse critério."
             )
-        )    
+        )
+
+
+
+
+        rentabilidades_selecionadas = st.multiselect(
+            "Direção da rentabilidade acumulada",
+            options=[
+                "POSITIVA (> 0%)",
+                "NEGATIVA (< 0%)"
+            ],
+            default=[],
+            help=(
+                "Filtra os ativos pela rentabilidade acumulada "
+                "desde a compra. Sem seleção, não aplica esse critério."
+            )
+        )
+
+
+
 
     criterio = st.radio(
         "Combinar filtros de percentil e status",
@@ -168,6 +187,35 @@ def render_monitoring():
             )
         )
 
+
+
+
+        position = portfolio_by_ticker.get(
+            item["ticker"].strip().upper()
+        )
+
+        rentabilidade = (
+            position.get("rentabilidade")
+            if position else None
+        )
+
+        atende_rentabilidade = (
+            (
+                "POSITIVA (> 0%)" in rentabilidades_selecionadas
+                and rentabilidade is not None
+                and rentabilidade > 0
+            )
+            or
+            (
+                "NEGATIVA (< 0%)" in rentabilidades_selecionadas
+                and rentabilidade is not None
+                and rentabilidade < 0
+            )
+        )
+
+
+
+
         criterios = [atende_percentil]
 
         if status_selecionados:
@@ -175,6 +223,9 @@ def render_monitoring():
 
         if variacoes_selecionadas:
             criterios.append(atende_variacao)
+
+        if rentabilidades_selecionadas:
+            criterios.append(atende_rentabilidade)
 
         if criterio == "OU":
             atende_criterios = any(criterios)
@@ -224,7 +275,7 @@ def render_monitoring():
                     f"{item['preco']:,.2f}",
                     f"{item['variacao_percentual']:+.2f}%"
                 )
-                
+
                 position = portfolio_by_ticker.get(item["ticker"].strip().upper())
 
                 if position:
